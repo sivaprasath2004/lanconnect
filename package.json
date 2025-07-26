@@ -1,0 +1,17 @@
+{
+  "name": "lanconnect",
+  "version": "1.0.0",
+  "description": "LAN file sharing tool",
+  "bin": "bin/lanConnect.js",
+  "pkg": {
+    "assets": [
+      "lib/server.js"
+    ],
+    "scripts": [
+      "bin/lanConnect.js"
+    ]
+  },
+  "dependencies": { 
+    "mime": "^3.0.0"
+  }
+}
