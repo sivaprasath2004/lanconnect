@@ -60,10 +60,9 @@ lanConnect.exe --version
 ### 📁 Project Structure
 
 ```
-/lanConnect 
+/lanConnect /bin
   ├── server.js            # Server logic
-  ├── lanConnect.js        # CLI logic
-  ├── package.json
+  ├── lanConnect.js        # CLI logic 
 ```
 
 ### 🛠️ Build the .exe with `pkg`
