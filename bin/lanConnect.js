@@ -5,11 +5,53 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const net = require('net');
-const readline=require('readline')
+const readline=require('readline') 
+let SERVER_PATH=path.join(__dirname, 'server.js');
+const startCloudflareTunnel=require("./startCloudFare")
+ const qrcode = require('qrcode-terminal');
 
-const SERVER_PATH = path.join(__dirname, 'server.js');
 const PROCESS_TRACK_FILE = path.join(os.tmpdir(), '.lanConnect-processes.json');
 const VERSION = '1.0.0';
+
+
+function getQRLines(text) {
+  let output = '';
+  qrcode.generate(text, { small: true }, qr => {
+    output = qr;
+  });
+  return output.trim().split('\n');
+}
+
+function printTwoColumn(leftTitle, rightTitle, leftQR, rightQR, leftURL, rightURL) {
+  const colWidth = 45;
+
+  // Titles
+  console.log(
+    leftTitle.padEnd(colWidth) +
+    rightTitle
+  );
+  console.log('');
+
+  // QR codes (side by side)
+  const maxLines = Math.max(leftQR.length, rightQR.length);
+  for (let i = 0; i < maxLines; i++) {
+    const left = leftQR[i] || '';
+    const right = rightQR[i] || '';
+    console.log(
+      left.padEnd(colWidth) +
+      right
+    );
+  }
+
+  console.log('');
+  console.log(
+    leftURL.padEnd(colWidth) +
+    rightURL
+  );
+}
+
+
+let PROCESS_TRACKING=[]
 
 function readProcesses() {
   if (!fs.existsSync(PROCESS_TRACK_FILE)) return [];
@@ -25,14 +67,23 @@ function writeProcesses(data) {
 }
 
 function getLocalIp() {
-  const interfaces = os.networkInterfaces();
-  for (const name in interfaces) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) {
+  const interfaces = os.networkInterfaces(); 
+  let isWifi=Object.keys(interfaces).find(ele=>ele.toLowerCase().includes("wi-fi"))
+  for (const name of Object.keys(interfaces)) {
+    if (name.toLowerCase().includes("loopback") || name.toLowerCase().includes("virtual") || name.toLowerCase().includes("vmware") || name.toLowerCase().includes("vbox")) {
+      continue; // skip virtual interfaces
+    }  
+    if(isWifi && !name.toLowerCase().includes("wi-fi")){
+      continue
+    } 
+    for (const iface of interfaces[name]) { 
+      if (
+        iface.family === 'IPv4' && iface.address && !iface.address.startsWith('169.') 
+      ) { 
         return iface.address;
       }
     }
-  }
+  } 
   return 'localhost';
 }
 
@@ -100,6 +151,7 @@ async function promptRootPath() {
 
 case 'start': {
   const port = await getAvailablePort(9009);
+  const hostname = getLocalIp();
   const username = arg1 || '';
   const password = arg2 || '';
 
@@ -123,17 +175,75 @@ case 'start': {
   }
 
 
-  const child = spawn('node', serverArgs, {
-        detached: true,
-        stdio: 'ignore'
-      }); 
-  child.unref();
 
-  const hostname = getLocalIp();
+function getCloudflaredPath() {
+  if (process.pkg) {
+    // pkg extracts assets near executable
+    return path.join(
+      path.dirname(process.execPath),
+      "cloudflared"
+    );
+  }
+
+  // dev mode
+  return path.join(
+    __dirname,
+    "resources",
+    "cloudflared"
+  );
+}
+
+ try {
+
+ const tunnel = await startCloudflareTunnel(
+    getCloudflaredPath(),
+    `http://${hostname}:${port}`
+  );
+
+  const lanURL = `http://${hostname}:${port}`;
+  const tunnelURL = tunnel?.url;
+
+  const lanQR = getQRLines(lanURL);
+  const tunnelQR = getQRLines(tunnelURL); 
+  printTwoColumn(
+    '📡 LAN Access',
+    '🌍 Tunnel Internet Access',
+    lanQR,
+    tunnelQR,
+    lanURL,
+    tunnelURL
+  );
+  
+
+
+  const child = spawn('node', serverArgs, {
+  detached: true,
+  stdio: ['ignore', 'pipe', 'pipe']
+});
+
+child.stdout.on('data', data => {
+  const text = data.toString();
+
+  // Detect QR lines (block characters)
+  if (text.includes('██') || text.includes('▄▄') || text.includes('▀')) {
+    process.stdout.write(text); // ✅ raw
+  } else {
+    process.stdout.write(`[SERVER] ${text}`);
+  }
+});
+
+child.stderr.on('data', data => {
+  process.stderr.write(`[SERVER ERROR] ${data}`);
+});
+
+child.unref();
+
   const record = {
     pid: child.pid,
     port,
-    url: `http://${hostname}:${port}/`,
+    tunnelId:tunnel?.pid,
+    url: `http://${hostname}:${port}`,
+    tunnelURL,
     username,
     password,
     root: rootPath || ''
@@ -143,6 +253,9 @@ case 'start': {
   writeProcesses(list);
 
   console.log(`✅ Started on port ${port} - ${record.url}`);
+   } catch (err) {
+    console.error("❌ Tunnel failed:", err);
+  }
   break;
 }
 
@@ -163,7 +276,11 @@ case 'start': {
       if (idx === -1 && portToKill < list.length) idx = portToKill;
       if (idx === -1) return console.error(`No process found on port ${portToKill}`);
       const pid = list[idx].pid;
+      const pids = list[idx].tunnelId;
       try {
+        if(pids){
+          process.kill(pids)
+        }
         process.kill(pid);
         list.splice(idx, 1);
         writeProcesses(list);
