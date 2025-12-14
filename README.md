@@ -53,6 +53,13 @@ lanConnect.exe --version
 
 ---
 
+
+## Demo 
+
+<img width="910" height="431" alt="image" src="https://github.com/user-attachments/assets/2a06bfc1-de70-42b9-bf8f-94da8251cd9b" />
+
+---
+
 ## 💡 Build Instructions (for developers)
 
 > Only needed if you're modifying the source and want to recompile the `.exe`.
@@ -100,3 +107,4 @@ Made by **sivaprasath**
 📧 Contact: \[[prasathsiva2004@gmail.com](mailto:prasathsiva2004@gmail.com)]
 
 --- 
+
