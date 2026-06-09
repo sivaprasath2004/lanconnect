@@ -1,6 +1,4 @@
  
-### 📄 `README.md`
-
 # lanConnect
 
 `lanConnect` is a simple, portable HTTP file server that runs on your local network with optional login support. It is compiled into a single `.exe` file using Node.js and `pkg`, requiring **no installation** or external dependencies.
